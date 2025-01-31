@@ -1,0 +1,62 @@
+import ee
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+
+# Authenticate and Initialize Earth Engine
+try:
+    ee.Initialize()
+except Exception as e:
+    ee.Authenticate()
+    ee.Initialize()
+
+# Define an Area of Interest (AOI)
+aoi = ee.Geometry.Rectangle([75.5, 19.0, 77.5, 21.0])  # Example coordinates
+
+# Load Sentinel-2 Image Collection
+collection = ee.ImageCollection("COPERNICUS/S2")\
+    .filterBounds(aoi)\
+    .filterDate("2019-01-01", "2020-12-31")\
+    .sort("CLOUDY_PIXEL_PERCENTAGE")\
+    .first()
+
+# Select relevant bands for LULC classification
+bands = ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']  # Blue, Green, Red, NIR, SWIR1, SWIR2
+image = collection.select(bands).clip(aoi)
+
+# Prepare Training Data (Dummy Data for Demonstration)
+num_samples = 1000
+X_data = np.random.rand(num_samples, 64, 64, 6)  # 64x64 patches with 6 spectral bands
+Y_data = np.random.randint(0, 5, size=(num_samples,))  # 5 land cover classes
+
+# Split Data
+X_train, X_test, Y_train, Y_test = train_test_split(X_data, Y_data, test_size=0.2, random_state=42)
+
+# Define CNN Model
+model = Sequential([
+    Conv2D(32, (3,3), activation='relu', input_shape=(64, 64, 6)),
+    MaxPooling2D(2,2),
+    Conv2D(64, (3,3), activation='relu'),
+    MaxPooling2D(2,2),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(5, activation='softmax')  # 5-class classification
+])
+
+# Compile Model
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Train Model
+model.fit(X_train, Y_train, epochs=10, batch_size=32, validation_data=(X_test, Y_test))
+
+# Save Model
+model.save("lulc_cnn.h5")
+
+# Display an example image
+plt.imshow(X_train[0][:, :, :3])  # Display first 3 bands (RGB)
+plt.title("Example LULC Patch")
+plt.show()
